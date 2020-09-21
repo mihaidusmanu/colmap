@@ -60,9 +60,7 @@ class Frustum {
 
     bool ContainsPoint(const Eigen::Vector3d& point) const;
 
-    const std::pair<double, double> GetBoundsX() const;
-    const std::pair<double, double> GetBoundsY() const;
-    const std::pair<double, double> GetBoundsZ() const;
+    const std::pair<double, double> GetBounds(const size_t coord_idx) const;
 
   private:
     const Eigen::Vector3d apex_;

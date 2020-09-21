@@ -12,6 +12,8 @@ Quadrilateral::Quadrilateral(
   const Eigen::Vector3d& bottom_left,
   const Eigen::Vector3d& bottom_right
 ) : top_left_(top_left), top_right_(top_right), bottom_left_(bottom_left), bottom_right_(bottom_right) {
+  // TODO: Corner names might be confusing... Change them?
+
   Check();
 
   // Plane offset.
@@ -130,58 +132,19 @@ bool Frustum::ContainsPoint(const Eigen::Vector3d& point) const {
     Quadrilateral(close_face_.BottomRight(), far_face_.BottomRight(), close_face_.BottomLeft(), far_face_.BottomLeft()).ContainsPointInHalfspace(point));
 }
 
-const std::pair<double, double> Frustum::GetBoundsX() const {
-  const double min_x = std::min<double>(
-    std::min<double>(
-      std::min<double>(close_face_.TopLeft().x(), far_face_.TopLeft().x()),
-      std::min<double>(close_face_.TopRight().x(), far_face_.TopRight().x())),
-    std::min<double>(
-      std::min<double>(close_face_.BottomLeft().x(), far_face_.BottomLeft().x()),
-      std::min<double>(close_face_.BottomRight().x(), far_face_.BottomRight().x())));
-  const double max_x = std::max<double>(
-    std::max<double>(
-      std::max<double>(close_face_.TopLeft().x(), far_face_.TopLeft().x()),
-      std::max<double>(close_face_.TopRight().x(), far_face_.TopRight().x())),
-    std::max<double>(
-      std::max<double>(close_face_.BottomLeft().x(), far_face_.BottomLeft().x()),
-      std::max<double>(close_face_.BottomRight().x(), far_face_.BottomRight().x())));
-  return std::make_pair(min_x, max_x);
-}
+const std::pair<double, double> Frustum::GetBounds(const size_t coord_idx) const {
+  CHECK_LE(coord_idx, 2);
 
-const std::pair<double, double> Frustum::GetBoundsY() const {
-  const double min_y = std::min<double>(
-    std::min<double>(
-      std::min<double>(close_face_.TopLeft().y(), far_face_.TopLeft().y()),
-      std::min<double>(close_face_.TopRight().y(), far_face_.TopRight().y())),
-    std::min<double>(
-      std::min<double>(close_face_.BottomLeft().y(), far_face_.BottomLeft().y()),
-      std::min<double>(close_face_.BottomRight().y(), far_face_.BottomRight().y())));
-  const double max_y = std::max<double>(
-    std::max<double>(
-      std::max<double>(close_face_.TopLeft().y(), far_face_.TopLeft().y()),
-      std::max<double>(close_face_.TopRight().y(), far_face_.TopRight().y())),
-    std::max<double>(
-      std::max<double>(close_face_.BottomLeft().y(), far_face_.BottomLeft().y()),
-      std::max<double>(close_face_.BottomRight().y(), far_face_.BottomRight().y())));
-  return std::make_pair(min_y, max_y);
-}
+  const std::vector<double> values = {
+    close_face_.TopLeft()(coord_idx), far_face_.TopLeft()(coord_idx),
+    close_face_.TopRight()(coord_idx), far_face_.TopRight()(coord_idx),
+    close_face_.BottomLeft()(coord_idx), far_face_.BottomLeft()(coord_idx),
+    close_face_.BottomRight()(coord_idx), far_face_.BottomRight()(coord_idx)};
+  
+  const double min = *std::min_element(values.begin(), values.end());
+  const double max = *std::max_element(values.begin(), values.end());
 
-const std::pair<double, double> Frustum::GetBoundsZ() const {
-  const double min_z = std::min<double>(
-    std::min<double>(
-      std::min<double>(close_face_.TopLeft().z(), far_face_.TopLeft().z()),
-      std::min<double>(close_face_.TopRight().z(), far_face_.TopRight().z())),
-    std::min<double>(
-      std::min<double>(close_face_.BottomLeft().z(), far_face_.BottomLeft().z()),
-      std::min<double>(close_face_.BottomRight().z(), far_face_.BottomRight().z())));
-  const double max_z = std::max<double>(
-    std::max<double>(
-      std::max<double>(close_face_.TopLeft().z(), far_face_.TopLeft().z()),
-      std::max<double>(close_face_.TopRight().z(), far_face_.TopRight().z())),
-    std::max<double>(
-      std::max<double>(close_face_.BottomLeft().z(), far_face_.BottomLeft().z()),
-      std::max<double>(close_face_.BottomRight().z(), far_face_.BottomRight().z())));
-  return std::make_pair(min_z, max_z);
+  return std::make_pair(min, max);
 }
 
 }  // namespace colmap

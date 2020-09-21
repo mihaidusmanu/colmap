@@ -1428,9 +1428,9 @@ void FrustumFeatureMatcher::Run() {
 
 #pragma omp parallel for
   for (size_t i = 0; i < frustums.size(); ++i) {
-    const std::pair<double, double> bounds_x = frustums[i].GetBoundsX();
-    const std::pair<double, double> bounds_y = frustums[i].GetBoundsY();
-    const std::pair<double, double> bounds_z = frustums[i].GetBoundsZ();
+    const std::pair<double, double> bounds_x = frustums[i].GetBounds(0);
+    const std::pair<double, double> bounds_y = frustums[i].GetBounds(1);
+    const std::pair<double, double> bounds_z = frustums[i].GetBounds(2);
     
     // Initialization.
     for (size_t j = i; j < frustums.size(); ++j) {
