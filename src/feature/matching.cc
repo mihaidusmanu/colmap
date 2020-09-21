@@ -1364,13 +1364,16 @@ void FrustumFeatureMatcher::Run() {
       continue;
     }
 
-    location_idxs.push_back(i);
-    camera_centers.push_back(-image.RotationMatrix().transpose() * .Tvec());
-
-    // Camera frustum.
-    const Eigen::Matrix3d R = image.RotationMatrix();
+    // Camera pose.
+    const Eigen::Vector4d qvec = image.QvecPrior();
+    const Eigen::Matrix3d R = QuaternionToRotationMatrix(qvec);
     const Eigen::Vector3d translation = image.TvecPrior();
 
+    // Append to list of valid images.
+    location_idxs.push_back(i);
+    camera_centers.push_back((-1) * R.transpose() * image.Tvec());
+
+    // Camera frustum.
     Eigen::Vector3d apex;
     apex << 0, 0, 0;
 
@@ -1433,7 +1436,7 @@ void FrustumFeatureMatcher::Run() {
     // Prefilter based on camera center distance.
     std::vector<size_t> possible_neighbors;
     for (size_t j = i; j < frustums.size(); ++j) {
-      if ((camera_centers[i] - camera_centers[j]).Norm() > distance_threshold) {
+      if ((camera_centers[i] - camera_centers[j]).norm() > distance_threshold) {
         continue;
       }
       possible_neighbors.push_back(j);

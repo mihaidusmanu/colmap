@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "base/database.h"
+#include "base/pose.h"
 #include "feature/sift.h"
 #include "util/alignment.h"
 #include "util/cache.h"

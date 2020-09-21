@@ -4,6 +4,8 @@
 
 namespace colmap {
 
+double epsilon = 1e-6;
+
 Quadrilateral::Quadrilateral(
   const Eigen::Vector3d& top_left,
   const Eigen::Vector3d& top_right,
@@ -34,7 +36,7 @@ Quadrilateral::Quadrilateral(
 void Quadrilateral::Check() const {
   Eigen::Matrix3d M;
   M << top_right_ - top_left_, bottom_left_ - top_left_, bottom_right_ - top_left_;
-  CHECK_DOUBLE_EQ(M.determinant(), 0.0);
+  CHECK_LE(M.determinant(), epsilon);
 }
 
 const Eigen::Vector3d& Quadrilateral::TopLeft() const {
@@ -99,7 +101,7 @@ double Quadrilateral::DistanceToPoint(const Eigen::Vector3d& point) const {
 
 bool Quadrilateral::ContainsPointInHalfspace(const Eigen::Vector3d& point) const {
   const Eigen::Vector3d point_t = point - plane_offset_;
-  return (Normal().dot(point_t) >= -1e-6);
+  return (Normal().dot(point_t) >= -epsilon);
 }
 
 Pyramid::Pyramid(const Eigen::Vector3d& apex, const Quadrilateral& base) : apex_(apex), base_(base) { };
