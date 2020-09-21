@@ -138,14 +138,14 @@ struct SpatialMatchingOptions {
 };
 
 struct FrustumMatchingOptions {
-  // Starting depth of the frustum from camera center.
-  double min_depth = 2.5;
+  // Starting depth of the frustum.
+  double min_depth = 1.0;
 
-  // Ending depth of the frustum from camera center.
-  double max_depth = 10.0;
+  // Ending depth of the frustum.
+  double max_depth = 25.0;
 
   // Number of samples for Monte Carlo intersection estimation.
-  int num_samples = 10000;
+  int num_samples = 5000;
 
   // The maximum number of nearest neighbors to match.
   int max_num_neighbors = 50;
