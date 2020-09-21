@@ -64,6 +64,7 @@ OptionManager::OptionManager(bool add_project_options) {
   sequential_matching.reset(new SequentialMatchingOptions());
   vocab_tree_matching.reset(new VocabTreeMatchingOptions());
   spatial_matching.reset(new SpatialMatchingOptions());
+  frustum_matching.reset(new FrustumMatchingOptions());
   transitive_matching.reset(new TransitiveMatchingOptions());
   image_pairs_matching.reset(new ImagePairsMatchingOptions());
   bundle_adjustment.reset(new BundleAdjustmentOptions());
@@ -178,6 +179,7 @@ void OptionManager::AddAllOptions() {
   AddSequentialMatchingOptions();
   AddVocabTreeMatchingOptions();
   AddSpatialMatchingOptions();
+  AddFrustumMatchingOptions();
   AddTransitiveMatchingOptions();
   AddImagePairsMatchingOptions();
   AddBundleAdjustmentOptions();
@@ -406,6 +408,26 @@ void OptionManager::AddSpatialMatchingOptions() {
                               &spatial_matching->max_num_neighbors);
   AddAndRegisterDefaultOption("SpatialMatching.max_distance",
                               &spatial_matching->max_distance);
+}
+
+void OptionManager::AddFrustumMatchingOptions() {
+  if (added_frustum_match_options_) {
+    return;
+  }
+  added_frustum_match_options_ = true;
+
+  AddMatchingOptions();
+
+  AddAndRegisterDefaultOption("FrustumMatching.min_depth",
+                              &frustum_matching->min_depth);
+  AddAndRegisterDefaultOption("FrustumMatching.max_depth",
+                              &frustum_matching->max_depth);
+  AddAndRegisterDefaultOption("FrustumMatching.num_samples",
+                              &frustum_matching->num_samples);
+  AddAndRegisterDefaultOption("FrustumMatching.max_num_neighbors",
+                              &frustum_matching->max_num_neighbors);
+  AddAndRegisterDefaultOption("FrustumMatching.min_iou",
+                              &frustum_matching->min_iou);
 }
 
 void OptionManager::AddTransitiveMatchingOptions() {
@@ -746,6 +768,7 @@ void OptionManager::Reset() {
   added_sequential_match_options_ = false;
   added_vocab_tree_match_options_ = false;
   added_spatial_match_options_ = false;
+  added_frustum_match_options_ = false;
   added_transitive_match_options_ = false;
   added_image_pairs_match_options_ = false;
   added_ba_options_ = false;
@@ -770,6 +793,7 @@ void OptionManager::ResetOptions(const bool reset_paths) {
   *sequential_matching = SequentialMatchingOptions();
   *vocab_tree_matching = VocabTreeMatchingOptions();
   *spatial_matching = SpatialMatchingOptions();
+  *frustum_matching = FrustumMatchingOptions();
   *transitive_matching = TransitiveMatchingOptions();
   *image_pairs_matching = ImagePairsMatchingOptions();
   *bundle_adjustment = BundleAdjustmentOptions();
@@ -802,6 +826,7 @@ bool OptionManager::Check() {
   if (sequential_matching) success = success && sequential_matching->Check();
   if (vocab_tree_matching) success = success && vocab_tree_matching->Check();
   if (spatial_matching) success = success && spatial_matching->Check();
+  if (frustum_matching) success = success && frustum_matching->Check();
   if (transitive_matching) success = success && transitive_matching->Check();
   if (image_pairs_matching) success = success && image_pairs_matching->Check();
 

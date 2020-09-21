@@ -1815,6 +1815,31 @@ int RunSpatialMatcher(int argc, char** argv) {
   return EXIT_SUCCESS;
 }
 
+int RunFrustumMatcher(int argc, char** argv) {
+  OptionManager options;
+  options.AddDatabaseOptions();
+  options.AddFrustumMatchingOptions();
+  options.Parse(argc, argv);
+
+  std::unique_ptr<QApplication> app;
+  if (options.sift_matching->use_gpu && kUseOpenGL) {
+    app.reset(new QApplication(argc, argv));
+  }
+
+  FrustumFeatureMatcher feature_matcher(*options.frustum_matching,
+                                        *options.sift_matching,
+                                        *options.database_path);
+
+  if (options.sift_matching->use_gpu && kUseOpenGL) {
+    RunThreadWithOpenGLContext(&feature_matcher);
+  } else {
+    feature_matcher.Start();
+    feature_matcher.Wait();
+  }
+
+  return EXIT_SUCCESS;
+}
+
 int RunTransitiveMatcher(int argc, char** argv) {
   OptionManager options;
   options.AddDatabaseOptions();
@@ -2146,6 +2171,7 @@ int main(int argc, char** argv) {
   commands.emplace_back("exhaustive_matcher", &RunExhaustiveMatcher);
   commands.emplace_back("feature_extractor", &RunFeatureExtractor);
   commands.emplace_back("feature_importer", &RunFeatureImporter);
+  commands.emplace_back("frustum_matcher", &RunFrustumMatcher);
   commands.emplace_back("hierarchical_mapper", &RunHierarchicalMapper);
   commands.emplace_back("image_deleter", &RunImageDeleter);
   commands.emplace_back("image_filterer", &RunImageFilterer);

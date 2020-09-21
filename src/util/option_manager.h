@@ -47,6 +47,7 @@ struct ExhaustiveMatchingOptions;
 struct SequentialMatchingOptions;
 struct VocabTreeMatchingOptions;
 struct SpatialMatchingOptions;
+struct FrustumMatchingOptions;
 struct TransitiveMatchingOptions;
 struct ImagePairsMatchingOptions;
 struct BundleAdjustmentOptions;
@@ -90,6 +91,7 @@ class OptionManager {
   void AddSequentialMatchingOptions();
   void AddVocabTreeMatchingOptions();
   void AddSpatialMatchingOptions();
+  void AddFrustumMatchingOptions();
   void AddTransitiveMatchingOptions();
   void AddImagePairsMatchingOptions();
   void AddBundleAdjustmentOptions();
@@ -129,6 +131,7 @@ class OptionManager {
   std::shared_ptr<SequentialMatchingOptions> sequential_matching;
   std::shared_ptr<VocabTreeMatchingOptions> vocab_tree_matching;
   std::shared_ptr<SpatialMatchingOptions> spatial_matching;
+  std::shared_ptr<FrustumMatchingOptions> frustum_matching;
   std::shared_ptr<TransitiveMatchingOptions> transitive_matching;
   std::shared_ptr<ImagePairsMatchingOptions> image_pairs_matching;
 
@@ -170,6 +173,7 @@ class OptionManager {
   bool added_sequential_match_options_;
   bool added_vocab_tree_match_options_;
   bool added_spatial_match_options_;
+  bool added_frustum_match_options_;
   bool added_transitive_match_options_;
   bool added_image_pairs_match_options_;
   bool added_ba_options_;

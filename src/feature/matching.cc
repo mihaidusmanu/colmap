@@ -199,6 +199,16 @@ bool SpatialMatchingOptions::Check() const {
   return true;
 }
 
+bool FrustumMatchingOptions::Check() const {
+  CHECK_OPTION_GT(min_depth, 0.0);
+  CHECK_OPTION_GT(max_depth, min_depth);
+  CHECK_OPTION_GT(num_samples, 0);
+  CHECK_OPTION_GT(max_num_neighbors, 0);
+  CHECK_OPTION_GE(min_iou, 0.0);
+  CHECK_OPTION_LE(min_iou, 1.0);
+  return true;
+}
+
 bool TransitiveMatchingOptions::Check() const {
   CHECK_OPTION_GT(batch_size, 0);
   CHECK_OPTION_GT(num_iterations, 0);
@@ -1293,6 +1303,206 @@ void SpatialFeatureMatcher::Run() {
       const size_t nn_idx = location_idxs.at(index_matrix(i, j));
       const image_t nn_image_id = image_ids.at(nn_idx);
       image_pairs.emplace_back(image_id, nn_image_id);
+    }
+
+    DatabaseTransaction database_transaction(&database_);
+    matcher_.Match(image_pairs);
+
+    PrintElapsedTime(timer);
+  }
+
+  GetTimer().PrintMinutes();
+}
+
+FrustumFeatureMatcher::FrustumFeatureMatcher(
+    const FrustumMatchingOptions& options,
+    const SiftMatchingOptions& match_options, const std::string& database_path)
+    : options_(options),
+      match_options_(match_options),
+      database_(database_path),
+      cache_(5 * options_.max_num_neighbors, &database_),
+      matcher_(match_options, &database_, &cache_) {
+  CHECK(options_.Check());
+  CHECK(match_options_.Check());
+}
+
+void FrustumFeatureMatcher::Run() {
+  PrintHeading1("Frustum feature matching");
+
+  if (!matcher_.Setup()) {
+    return;
+  }
+
+  cache_.Setup();
+
+  const std::vector<image_t> image_ids = cache_.GetImageIds();
+
+  // TODO: Prefilter based on position for speed up and then increase num_samples get more accurate IoUs.
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Spatial indexing
+  //////////////////////////////////////////////////////////////////////////////
+
+  Timer timer;
+  timer.Start();
+
+  std::cout << "Indexing images..." << std::flush;
+
+  size_t num_locations = 0;
+  std::vector<Frustum> frustums;
+
+  std::vector<size_t> location_idxs;
+  location_idxs.reserve(image_ids.size());
+
+  for (size_t i = 0; i < image_ids.size(); ++i) {
+    const auto image_id = image_ids[i];
+    const auto& image = cache_.GetImage(image_id);
+
+    if (!image.HasQvecPrior() && !image.HasTvecPrior()) {
+      continue;
+    }
+
+    location_idxs.push_back(i);
+
+    // Camera frustum.
+    const Eigen::Matrix3d R = image.RotationMatrix();
+    const Eigen::Vector3d translation = image.TvecPrior();
+
+    Eigen::Vector3d apex;
+    apex << 0, 0, 0;
+
+    Eigen::Vector3d top_left;
+    top_left << (-1), (-1), 1;
+    Eigen::Vector3d top_right;
+    top_right << 1, (-1), 1;
+    Eigen::Vector3d bottom_left;
+    bottom_left << (-1), 1, 1;
+    Eigen::Vector3d bottom_right;
+    bottom_right << 1, 1, 1;
+
+    frustums.push_back(Frustum(
+      R * apex + translation,
+      Quadrilateral(
+        R * (options_.min_depth * top_left) + translation,
+        R * (options_.min_depth * top_right) + translation,
+        R * (options_.min_depth * bottom_left) + translation,
+        R * (options_.min_depth * bottom_right) + translation),
+      Quadrilateral(
+        R * (options_.max_depth * top_left) + translation,
+        R * (options_.max_depth * top_right) + translation,
+        R * (options_.max_depth * bottom_left) + translation,
+        R * (options_.max_depth * bottom_right) + translation)));
+
+    num_locations += 1;
+  }
+
+  PrintElapsedTime(timer);
+
+  if (num_locations == 0) {
+    std::cout << " => No images with location data." << std::endl;
+    GetTimer().PrintMinutes();
+    return;
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Computing IoUs between frustums
+  //////////////////////////////////////////////////////////////////////////////
+
+  timer.Restart();
+
+  std::cout << "Computing IoUs between frustums..." << std::flush;
+
+  Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> ious(frustums.size(), frustums.size());
+
+#pragma omp parallel for
+  for (size_t i = 0; i < frustums.size(); ++i) {
+    const std::pair<double, double> bounds_x = frustums[i].GetBoundsX();
+    const std::pair<double, double> bounds_y = frustums[i].GetBoundsY();
+    const std::pair<double, double> bounds_z = frustums[i].GetBoundsZ();
+    
+    // Initialization.
+    for (size_t j = i; j < frustums.size(); ++j) {
+      ious(i, j) = 0;
+    }
+    
+    // Monte Carlo.
+    for (size_t k = 0; k < (size_t)options_.num_samples; ++k) {
+      Eigen::Vector3d point = Eigen::Vector3d::Random();
+      point.x() = .5 * (point.x() + 1) * (bounds_x.second - bounds_x.first) + bounds_x.first;
+      point.y() = .5 * (point.y() + 1) * (bounds_y.second - bounds_y.first) + bounds_y.first;
+      point.z() = .5 * (point.z() + 1) * (bounds_z.second - bounds_z.first) + bounds_z.first;
+      
+      if (!frustums[i].ContainsPoint(point)){
+        continue;
+      }
+      
+      for (size_t j = i; j < frustums.size(); ++j) {
+        if (frustums[j].ContainsPoint(point)) {
+          ++ious(i, j);
+        }
+      }
+    }
+
+    // Compute IoU.
+    for (size_t j = i; j < frustums.size(); ++j) {
+      const double intersection_volume = 1.0 * ious(i, j) / options_.num_samples * (bounds_x.second - bounds_x.first) * (bounds_y.second - bounds_y.first) * (bounds_z.second - bounds_z.first);
+      ious(i, j) = std::min<double>(intersection_volume / (frustums[i].Volume() + frustums[j].Volume() - intersection_volume), 1.0);
+      ious(j, i) = ious(i, j);
+    }
+  }
+
+  PrintElapsedTime(timer);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Matching
+  //////////////////////////////////////////////////////////////////////////////
+
+  const int knn = std::min<int>(options_.max_num_neighbors, num_locations);
+
+  std::vector<std::pair<image_t, image_t>> image_pairs;
+  image_pairs.reserve(knn);
+
+  for (size_t i = 0; i < num_locations; ++i) {
+    if (IsStopped()) {
+      GetTimer().PrintMinutes();
+      return;
+    }
+
+    timer.Restart();
+
+    std::cout << StringPrintf("Matching image [%d/%d]", i + 1, num_locations)
+              << std::flush;
+
+    image_pairs.clear();
+
+    // Recover IoUs between current image and all other images.
+    std::vector<double> current_ious(ious.row(i).data(), ious.row(i).data() + ious.cols());
+
+    // Initialize original index locations.
+    std::vector<size_t> indices(current_ious.size());
+    std::iota(indices.begin(), indices.end(), 0);
+
+    // Sort indexes.
+    std::sort(indices.begin(), indices.end(), [&current_ious](size_t i1, size_t i2) {return current_ious[i1] > current_ious[i2];});
+
+    for (size_t j = 0; j < (size_t)knn; ++j) {
+      // std::cerr << image_ids.at(location_idxs[i]) << ": " << i << ", " << image_ids.at(location_idxs[indices[j]]) << ": " << indices[j] << " -> " << current_ious[indices[j]] << std::endl;
+      // Check if query equals result.
+      if (indices[j] == i) {
+        continue;
+      }
+
+      // Since the nearest neighbors are sorted by distance, we can break.
+      if (current_ious[indices[j]] < options_.min_iou) {
+        break;
+      }
+
+      const size_t idx = location_idxs[i];
+      const image_t image_id = image_ids.at(idx);
+      const size_t nn_idx = location_idxs.at(indices[j]);
+      const image_t nn_image_id = image_ids.at(nn_idx);
+      image_pairs.emplace_back(image_id, nn_image_id);
+      // std::cerr << image_id << " " << nn_image_id << std::endl;
     }
 
     DatabaseTransaction database_transaction(&database_);

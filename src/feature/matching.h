@@ -40,6 +40,7 @@
 #include "feature/sift.h"
 #include "util/alignment.h"
 #include "util/cache.h"
+#include "util/frustum.h"
 #include "util/opengl_utils.h"
 #include "util/threading.h"
 #include "util/timer.h"
@@ -131,6 +132,25 @@ struct SpatialMatchingOptions {
   // The maximum distance between the query and nearest neighbor. For GPS
   // coordinates the unit is Euclidean distance in meters.
   double max_distance = 100;
+
+  bool Check() const;
+};
+
+struct FrustumMatchingOptions {
+  // Starting depth of the frustum from camera center.
+  double min_depth = 2.5;
+
+  // Ending depth of the frustum from camera center.
+  double max_depth = 10.0;
+
+  // Number of samples for Monte Carlo intersection estimation.
+  int num_samples = 10000;
+
+  // The maximum number of nearest neighbors to match.
+  int max_num_neighbors = 50;
+
+  // The mainimum IoU between the query and nearest neighbor frustum.
+  double min_iou = 0.1;
 
   bool Check() const;
 };
@@ -473,6 +493,24 @@ class SpatialFeatureMatcher : public Thread {
   void Run() override;
 
   const SpatialMatchingOptions options_;
+  const SiftMatchingOptions match_options_;
+  Database database_;
+  FeatureMatcherCache cache_;
+  SiftFeatureMatcher matcher_;
+};
+
+// Match images against nearest neighbors in terms of frustum IoU using
+// camera pose prior, e.g. provided manually or extracted from EXIF.
+class FrustumFeatureMatcher : public Thread {
+ public:
+  FrustumFeatureMatcher(const FrustumMatchingOptions& options,
+                        const SiftMatchingOptions& match_options,
+                        const std::string& database_path);
+
+ private:
+  void Run() override;
+
+  const FrustumMatchingOptions options_;
   const SiftMatchingOptions match_options_;
   Database database_;
   FeatureMatcherCache cache_;
