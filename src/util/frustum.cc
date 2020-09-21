@@ -123,6 +123,9 @@ double Frustum::Volume() const {
 }
 
 bool Frustum::ContainsPoint(const Eigen::Vector3d& point) const {
+  // Corners should be arranged such that 
+  // n = (top_right_ - top_left_) x (bottom_left_ - top_left_)
+  // points towards the inside of the frustum.
   return (
     close_face_.ContainsPointInHalfspace(point) &
     Quadrilateral(far_face_.TopRight(), far_face_.TopLeft(), far_face_.BottomRight(), far_face_.BottomLeft()).ContainsPointInHalfspace(point) &
