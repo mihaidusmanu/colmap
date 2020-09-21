@@ -1354,6 +1354,8 @@ void FrustumFeatureMatcher::Run() {
   std::vector<size_t> location_idxs;
   location_idxs.reserve(image_ids.size());
 
+  std::vector<Eigen::Vector3d> camera_centers;
+
   for (size_t i = 0; i < image_ids.size(); ++i) {
     const auto image_id = image_ids[i];
     const auto& image = cache_.GetImage(image_id);
@@ -1363,6 +1365,7 @@ void FrustumFeatureMatcher::Run() {
     }
 
     location_idxs.push_back(i);
+    camera_centers.push_back(-image.RotationMatrix().transpose() * .Tvec());
 
     // Camera frustum.
     const Eigen::Matrix3d R = image.RotationMatrix();
@@ -1414,6 +1417,8 @@ void FrustumFeatureMatcher::Run() {
 
   Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> ious(frustums.size(), frustums.size());
 
+  const double distance_threshold = 1.75 * options_.max_depth;
+
 #pragma omp parallel for
   for (size_t i = 0; i < frustums.size(); ++i) {
     const std::pair<double, double> bounds_x = frustums[i].GetBoundsX();
@@ -1424,21 +1429,36 @@ void FrustumFeatureMatcher::Run() {
     for (size_t j = i; j < frustums.size(); ++j) {
       ious(i, j) = 0;
     }
+
+    // Prefilter based on camera center distance.
+    std::vector<size_t> possible_neighbors;
+    for (size_t j = i; j < frustums.size(); ++j) {
+      if ((camera_centers[i] - camera_centers[j]).Norm() > distance_threshold) {
+        continue;
+      }
+      possible_neighbors.push_back(j);
+    }
     
-    // Monte Carlo.
+    // Monte Carlo method.
+    //
+    // We sample from a uniform probability defined over the B - the bounding box of the frustum.
+    // This satisfies P(S) = Vol(V) / Vol(B) for any V subvolume of B.
+    //
+    // ious(i, j) will temporarily contain the number of samples
+    // that are part of both frustum_i and frustum_j.
     for (size_t k = 0; k < (size_t)options_.num_samples; ++k) {
       Eigen::Vector3d point = Eigen::Vector3d::Random();
       point.x() = .5 * (point.x() + 1) * (bounds_x.second - bounds_x.first) + bounds_x.first;
       point.y() = .5 * (point.y() + 1) * (bounds_y.second - bounds_y.first) + bounds_y.first;
       point.z() = .5 * (point.z() + 1) * (bounds_z.second - bounds_z.first) + bounds_z.first;
-      
+
       if (!frustums[i].ContainsPoint(point)){
         continue;
       }
       
-      for (size_t j = i; j < frustums.size(); ++j) {
-        if (frustums[j].ContainsPoint(point)) {
-          ++ious(i, j);
+      for (size_t j = i; j < possible_neighbors.size(); ++j) {
+        if (frustums[possible_neighbors[j]].ContainsPoint(point)) {
+          ++ious(i, possible_neighbors[j]);
         }
       }
     }
@@ -1475,6 +1495,7 @@ void FrustumFeatureMatcher::Run() {
 
     image_pairs.clear();
 
+    // Convert to std vector for top K.
     // Recover IoUs between current image and all other images.
     std::vector<double> current_ious(ious.row(i).data(), ious.row(i).data() + ious.cols());
 
@@ -1483,10 +1504,10 @@ void FrustumFeatureMatcher::Run() {
     std::iota(indices.begin(), indices.end(), 0);
 
     // Sort indexes.
+    // TODO: Switch to partial_sort for NlogK instead of NlogN.
     std::sort(indices.begin(), indices.end(), [&current_ious](size_t i1, size_t i2) {return current_ious[i1] > current_ious[i2];});
 
     for (size_t j = 0; j < (size_t)knn; ++j) {
-      // std::cerr << image_ids.at(location_idxs[i]) << ": " << i << ", " << image_ids.at(location_idxs[indices[j]]) << ": " << indices[j] << " -> " << current_ious[indices[j]] << std::endl;
       // Check if query equals result.
       if (indices[j] == i) {
         continue;
@@ -1502,7 +1523,6 @@ void FrustumFeatureMatcher::Run() {
       const size_t nn_idx = location_idxs.at(indices[j]);
       const image_t nn_image_id = image_ids.at(nn_idx);
       image_pairs.emplace_back(image_id, nn_image_id);
-      // std::cerr << image_id << " " << nn_image_id << std::endl;
     }
 
     DatabaseTransaction database_transaction(&database_);
