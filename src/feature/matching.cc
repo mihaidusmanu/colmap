@@ -1365,6 +1365,7 @@ void FrustumFeatureMatcher::Run() {
     }
 
     // Camera pose.
+    // TODO: Fix inconsistency between tvec prior expected by SpatialMatcher (camera center) and FrustumMatcher (translation).
     const Eigen::Vector4d qvec = image.QvecPrior();
     const Eigen::Matrix3d R = QuaternionToRotationMatrix(qvec);
     const Eigen::Vector3d translation = image.TvecPrior();
