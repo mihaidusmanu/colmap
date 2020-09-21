@@ -1421,7 +1421,10 @@ void FrustumFeatureMatcher::Run() {
 
   Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> ious(frustums.size(), frustums.size());
 
+  // TODO: Check max_depth multiplier.
   const double distance_threshold = 1.75 * options_.max_depth;
+
+  // TODO: Fix randomness. Is this possible with pragma?
 
 #pragma omp parallel for
   for (size_t i = 0; i < frustums.size(); ++i) {
@@ -1445,8 +1448,8 @@ void FrustumFeatureMatcher::Run() {
     
     // Monte Carlo method.
     //
-    // We sample from a uniform probability defined over the B - the bounding box of the frustum.
-    // This satisfies P(S) = Vol(V) / Vol(B) for any V subvolume of B.
+    // We sample from a uniform distribution defined over the B - the bounding box of the frustum.
+    // This satisfies P(V) = Vol(V) / Vol(B) for any V subvolume of B.
     //
     // ious(i, j) will temporarily contain the number of samples
     // that are part of both frustum_i and frustum_j.
