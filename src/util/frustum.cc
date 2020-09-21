@@ -1,7 +1,5 @@
 #include "util/frustum.h"
 
-// TODO: All this needs to be tested :)!
-
 namespace colmap {
 
 double epsilon = 1e-6;
