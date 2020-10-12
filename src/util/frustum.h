@@ -56,7 +56,7 @@ class Frustum {
   public:
     Frustum(const Eigen::Vector3d& apex, const Quadrilateral& close_face, const Quadrilateral& far_face);
 
-    double Volume() const;
+    double Volume();
 
     bool ContainsPoint(const Eigen::Vector3d& point) const;
 

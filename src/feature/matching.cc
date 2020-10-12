@@ -1521,7 +1521,7 @@ void FrustumFeatureMatcher::Run() {
       }
 
       // Since the nearest neighbors are sorted by distance, we can break.
-      if (current_ious[indices[j]] < options_.min_iou) {
+      if (current_ious[indices[j]] <= options_.min_iou) {
         break;
       }
 

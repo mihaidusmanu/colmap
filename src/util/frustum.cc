@@ -10,7 +10,7 @@ Quadrilateral::Quadrilateral(
   const Eigen::Vector3d& bottom_left,
   const Eigen::Vector3d& bottom_right
 ) : top_left_(top_left), top_right_(top_right), bottom_left_(bottom_left), bottom_right_(bottom_right) {
-  // TODO: Corner names might be confusing... Change them?
+  // TODO: Corner names might be confusing... Should I change them?
 
   Check();
 
@@ -34,6 +34,7 @@ Quadrilateral::Quadrilateral(
 }
 
 void Quadrilateral::Check() const {
+  // Check that corners are coplanar.
   Eigen::Matrix3d M;
   M << top_right_ - top_left_, bottom_left_ - top_left_, bottom_right_ - top_left_;
   CHECK_LE(M.determinant(), epsilon);
@@ -113,10 +114,17 @@ double Pyramid::Volume() const {
 
 
 Frustum::Frustum(const Eigen::Vector3d& apex, const Quadrilateral& close_face, const Quadrilateral& far_face) : apex_(apex), close_face_(close_face), far_face_(far_face) {
-  volume_ = Pyramid(apex_, far_face_).Volume() - Pyramid(apex_, close_face_).Volume();
+  volume_ = -1;
 }
 
-double Frustum::Volume() const {
+double Frustum::Volume() {
+  // Check volume cache.
+  if (volume_ >= 0) {
+    return volume_;
+  }
+
+  // V = V_far_pyramid - V_close_pyramid.
+  volume_ = Pyramid(apex_, far_face_).Volume() - Pyramid(apex_, close_face_).Volume();
   return volume_;
 }
 

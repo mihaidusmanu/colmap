@@ -151,7 +151,7 @@ struct FrustumMatchingOptions {
   int max_num_neighbors = 50;
 
   // The mainimum IoU between the query and nearest neighbor frustum.
-  double min_iou = 0.05;
+  double min_iou = 0.0;
 
   bool Check() const;
 };
