@@ -1842,7 +1842,7 @@ void Reconstruction::WriteRegistrationOrderText(const std::string& path) const {
   CHECK(file.is_open()) << path;
 
   for (const auto& image_id : reg_image_ids_) {
-    file << image_id << std::endl;
+    file << Image(image_id).Name() << std::endl;
   }
 }
 
