@@ -760,12 +760,14 @@ void Reconstruction::ReadBinary(const std::string& path) {
 }
 
 void Reconstruction::WriteText(const std::string& path) const {
+  WriteRegistrationOrderText(JoinPaths(path, "order.txt"));
   WriteCamerasText(JoinPaths(path, "cameras.txt"));
   WriteImagesText(JoinPaths(path, "images.txt"));
   WritePoints3DText(JoinPaths(path, "points3D.txt"));
 }
 
 void Reconstruction::WriteBinary(const std::string& path) const {
+  WriteRegistrationOrderText(JoinPaths(path, "order.txt"));
   WriteCamerasBinary(JoinPaths(path, "cameras.bin"));
   WriteImagesBinary(JoinPaths(path, "images.bin"));
   WritePoints3DBinary(JoinPaths(path, "points3D.bin"));
@@ -1832,6 +1834,15 @@ void Reconstruction::ReadPoints3DBinary(const std::string& path) {
     point3D.Track().Compress();
 
     points3D_.emplace(point3D_id, point3D);
+  }
+}
+
+void Reconstruction::WriteRegistrationOrderText(const std::string& path) const {
+  std::ofstream file(path, std::ios::trunc);
+  CHECK(file.is_open()) << path;
+
+  for (const auto& image_id : reg_image_ids_) {
+    file << image_id << std::endl;
   }
 }
 

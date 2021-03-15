@@ -404,6 +404,7 @@ class Reconstruction {
   void ReadImagesBinary(const std::string& path);
   void ReadPoints3DBinary(const std::string& path);
 
+  void WriteRegistrationOrderText(const std::string& path) const;
   void WriteCamerasText(const std::string& path) const;
   void WriteImagesText(const std::string& path) const;
   void WritePoints3DText(const std::string& path) const;
