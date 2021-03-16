@@ -133,6 +133,9 @@ struct IncrementalMapperOptions {
   // be reconstructed by default.
   std::unordered_set<std::string> image_names;
 
+  // Order options.
+  std::vector<std::string> image_names_registration_order;
+
   // If reconstruction is provided as input, fix the existing image poses.
   bool fix_existing_images = false;
 

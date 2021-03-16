@@ -386,6 +386,162 @@ void IncrementalMapperController::Reconstruct(
 
   IncrementalMapper mapper(&database_cache_);
 
+  // Check if registration order is given.
+  if (options_->image_names_registration_order.size() > 0) {
+    PrintHeading1("Following predefined registration order.");
+    
+    CHECK(reconstruction_manager_->Size() == 0) << "Cannot resume while also "
+                                                   "following registration "
+                                                   "order.";
+    
+    CHECK(options_->image_names_registration_order.size() >= 2) << "Not enough images.";
+
+    // Start reconstruction.
+    size_t reconstruction_idx = reconstruction_manager_->Add();
+    Reconstruction& reconstruction = 
+        reconstruction_manager_->Get(reconstruction_idx);
+
+    mapper.BeginReconstruction(&reconstruction);
+
+    // Initial image pair.
+    image_t image_id1;
+    {
+      const Image* image_ptr = database_cache_.FindImageWithName(options_->image_names_registration_order[0]);
+      CHECK(image_ptr != nullptr) << "Image not in database.";
+      image_id1 = image_ptr->ImageId();
+    }
+    image_t image_id2;
+    {
+      const Image* image_ptr = database_cache_.FindImageWithName(options_->image_names_registration_order[1]);
+      CHECK(image_ptr != nullptr) << "Image not in database.";
+      image_id2 = image_ptr->ImageId();
+    }
+
+    // Initialization.
+    PrintHeading1(StringPrintf("Initializing with image pair #%d and #%d",
+                                image_id1, image_id2));
+    const bool reg_init_success = mapper.RegisterInitialImagePair(
+        init_mapper_options, image_id1, image_id2);
+    if (!reg_init_success) {
+      std::cout << "  => Initialization failed - possible solutions:"
+                << std::endl
+                << "     - try to relax the initialization constraints"
+                << std::endl
+                << "     - manually select an initial image pair"
+                << std::endl;
+      mapper.EndReconstruction(kDiscardReconstruction);
+      reconstruction_manager_->Delete(reconstruction_idx);
+      return;
+    }
+
+    AdjustGlobalBundle(*options_, &mapper);
+    FilterPoints(*options_, &mapper);
+    FilterImages(*options_, &mapper);
+
+    // Initial image pair failed to register.
+    if (reconstruction.NumRegImages() == 0 ||
+        reconstruction.NumPoints3D() == 0) {
+      mapper.EndReconstruction(kDiscardReconstruction);
+      reconstruction_manager_->Delete(reconstruction_idx);
+      std::cout << "  => Initialization failed after BA." << std::endl;
+      return;
+    }
+
+    if (options_->extract_colors) {
+      ExtractColors(image_path_, image_id1, &reconstruction);
+    }
+
+    Callback(INITIAL_IMAGE_PAIR_REG_CALLBACK);
+
+    // Incremental mapper.
+    size_t snapshot_prev_num_reg_images = reconstruction.NumRegImages();
+    size_t ba_prev_num_reg_images = reconstruction.NumRegImages();
+    size_t ba_prev_num_points = reconstruction.NumPoints3D();
+    
+    std::vector<std::string> image_names_failed;
+    for (size_t image_idx = 2; image_idx < options_->image_names_registration_order.size(); ++image_idx) {
+      BlockIfPaused();
+      if (IsStopped()) {
+        break;
+      }
+
+      const Image* next_image_ptr = database_cache_.FindImageWithName(options_->image_names_registration_order[image_idx]);
+      CHECK(next_image_ptr != nullptr) << "Image not in database.";
+      const image_t next_image_id = next_image_ptr->ImageId();
+      const Image& next_image = reconstruction.Image(next_image_id);
+
+      PrintHeading1(StringPrintf("Registering image #%d (%d)", next_image_id,
+                                  reconstruction.NumRegImages() + 1));
+
+      std::cout << StringPrintf("  => Image sees %d / %d points",
+                                next_image.NumVisiblePoints3D(),
+                                next_image.NumObservations())
+                << std::endl;
+
+      bool reg_next_success =
+          mapper.RegisterNextImage(options_->Mapper(), next_image_id);
+
+      if (reg_next_success) {
+        TriangulateImage(*options_, next_image, &mapper);
+        IterativeLocalRefinement(*options_, next_image_id, &mapper);
+
+        if (reconstruction.NumRegImages() >=
+                options_->ba_global_images_ratio * ba_prev_num_reg_images ||
+            reconstruction.NumRegImages() >=
+                options_->ba_global_images_freq + ba_prev_num_reg_images ||
+            reconstruction.NumPoints3D() >=
+                options_->ba_global_points_ratio * ba_prev_num_points ||
+            reconstruction.NumPoints3D() >=
+                options_->ba_global_points_freq + ba_prev_num_points) {
+          IterativeGlobalRefinement(*options_, &mapper);
+          ba_prev_num_points = reconstruction.NumPoints3D();
+          ba_prev_num_reg_images = reconstruction.NumRegImages();
+        }
+
+        if (options_->extract_colors) {
+          ExtractColors(image_path_, next_image_id, &reconstruction);
+        }
+
+        if (options_->snapshot_images_freq > 0 &&
+            reconstruction.NumRegImages() >=
+                options_->snapshot_images_freq +
+                    snapshot_prev_num_reg_images) {
+          snapshot_prev_num_reg_images = reconstruction.NumRegImages();
+          WriteSnapshot(reconstruction, options_->snapshot_path);
+        }
+
+        Callback(NEXT_IMAGE_REG_CALLBACK);
+      } else {
+        std::cout << "  => Could not register, trying another image."
+                  << std::endl;
+        image_names_failed.push_back(options_->image_names_registration_order[image_idx]);
+      }
+    }
+    
+    if (IsStopped()) {
+      const bool kDiscardReconstruction = false;
+      mapper.EndReconstruction(kDiscardReconstruction);
+      return;
+    }
+
+    // Only run final global BA, if last incremental BA was not global.
+    if (reconstruction.NumRegImages() >= 2 &&
+        reconstruction.NumRegImages() != ba_prev_num_reg_images &&
+        reconstruction.NumPoints3D() != ba_prev_num_points) {
+      IterativeGlobalRefinement(*options_, &mapper);
+    }
+
+    // End reconstruction.
+    {
+      const bool kDiscardReconstruction = false;
+      mapper.EndReconstruction(kDiscardReconstruction);
+    }
+
+    Callback(LAST_IMAGE_REG_CALLBACK);
+    
+    return;
+  }
+
   // Is there a sub-model before we start the reconstruction? I.e. the user
   // has imported an existing reconstruction.
   const bool initial_reconstruction_given = reconstruction_manager_->Size() > 0;

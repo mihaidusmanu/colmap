@@ -186,6 +186,7 @@ int RunMapper(int argc, char** argv) {
   std::string input_path;
   std::string output_path;
   std::string image_list_path;
+  bool preserve_registration_order = false;
 
   OptionManager options;
   options.AddDatabaseOptions();
@@ -193,6 +194,7 @@ int RunMapper(int argc, char** argv) {
   options.AddDefaultOption("input_path", &input_path);
   options.AddRequiredOption("output_path", &output_path);
   options.AddDefaultOption("image_list_path", &image_list_path);
+  options.AddDefaultOption("preserve_registration_order", &preserve_registration_order);
   options.AddMapperOptions();
   options.Parse(argc, argv);
 
@@ -205,6 +207,9 @@ int RunMapper(int argc, char** argv) {
     const auto image_names = ReadTextFileLines(image_list_path);
     options.mapper->image_names =
         std::unordered_set<std::string>(image_names.begin(), image_names.end());
+    if (preserve_registration_order) {
+      options.mapper->image_names_registration_order = image_names;
+    }
   }
 
   ReconstructionManager reconstruction_manager;
