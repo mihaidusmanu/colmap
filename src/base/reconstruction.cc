@@ -760,7 +760,6 @@ void Reconstruction::ReadBinary(const std::string& path) {
 }
 
 void Reconstruction::WriteText(const std::string& path) const {
-  WriteRegistrationOrderText(JoinPaths(path, "order.txt"));
   WriteCamerasText(JoinPaths(path, "cameras.txt"));
   WriteImagesText(JoinPaths(path, "images.txt"));
   WritePoints3DText(JoinPaths(path, "points3D.txt"));
@@ -1841,8 +1840,9 @@ void Reconstruction::WriteRegistrationOrderText(const std::string& path) const {
   std::ofstream file(path, std::ios::trunc);
   CHECK(file.is_open()) << path;
 
-  for (const auto& image_id : reg_image_ids_) {
-    file << Image(image_id).Name() << std::endl;
+  for (const auto image_id : reg_image_ids_){
+    const class Image& image = Image(image_id);
+    file << image.Name() << std::endl;
   }
 }
 
